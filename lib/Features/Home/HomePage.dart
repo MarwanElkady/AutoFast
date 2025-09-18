@@ -1,5 +1,6 @@
 import 'package:autoelkady/Core/components/custom_container.dart';
 import 'package:autoelkady/Core/components/custom_text.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -24,6 +25,7 @@ class _HomepageState extends State<Homepage> {
         backgroundColor: Colors.white,
         scrolledUnderElevation: 0,
       ),
+
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Column(
@@ -31,22 +33,57 @@ class _HomepageState extends State<Homepage> {
           children: [
             const SizedBox(height: 20),
 
-            // Top bar
+            // 🔹 Top bar
+            // later  i need to make the app gets the location automatically from the user
+            // later i need to take the pp from the user from the settings page
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const CircleAvatar(
-                  radius: 24,
-                  backgroundImage: NetworkImage(
-                    'https://preview.redd.it/k7qeur2wcmm61.jpg?width=640&crop=smart&auto=webp&s=4f8ee906ddd2f4af24643d375b24364f1ede3569',
-                  ),
+                StreamBuilder<DocumentSnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(FirebaseAuth.instance.currentUser!.uid)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const CircleAvatar(
+                        radius: 24,
+                        backgroundColor: Colors.grey,
+                      );
+                    }
+
+                    if (!snapshot.hasData || !snapshot.data!.exists) {
+                      return const CircleAvatar(
+                        radius: 24,
+                        backgroundColor: Colors.grey,
+                        child: Icon(Icons.person, color: Colors.white),
+                      );
+                    }
+
+                    final userData =
+                        snapshot.data!.data() as Map<String, dynamic>;
+                    final profileImageUrl = userData['profileImageUrl'];
+
+                    return CircleAvatar(
+                      radius: 24,
+                      backgroundImage:
+                          profileImageUrl != null && profileImageUrl.isNotEmpty
+                          ? NetworkImage(profileImageUrl) // 👈 fetch from DB
+                          : const AssetImage(
+                                  'assets/images/default_profile.png',
+                                )
+                                as ImageProvider, // fallback image
+                    );
+                  },
                 ),
+
                 const CustomText(
                   text: 'Cairo Egypt',
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                   color: Colors.grey,
                 ),
+
                 IconButton(
                   icon: const Icon(CupertinoIcons.settings),
                   onPressed: () {
@@ -63,16 +100,53 @@ class _HomepageState extends State<Homepage> {
 
             const SizedBox(height: 20),
 
-            // Greeting
-            Row(
-              children: [
-                CustomText(
-                  text: 'Hello, ',
-                  fontSize: 35,
-                  color: Colors.grey.shade400,
-                ),
-                const CustomText(text: 'Elkady', fontSize: 35),
-              ],
+            // 🔹 Greeting hard coded
+            // Row(
+            //   children: [
+            //     CustomText(
+            //       text: 'Hello, ',
+            //       fontSize: 35,
+            //       color: Colors.grey.shade400,
+            //     ),
+            //     const CustomText(text: 'Elkady', fontSize: 35),
+            //   ],
+            // ),
+
+            // Greeting by actual user name
+            StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(
+                    FirebaseAuth.instance.currentUser!.uid,
+                  ) // later replace with FirebaseAuth.instance.currentUser!.uid
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const CustomText(
+                    text: "Loading...",
+                    fontSize: 35,
+                    color: Colors.grey,
+                  );
+                }
+
+                if (!snapshot.hasData || !snapshot.data!.exists) {
+                  return const CustomText(text: "Hello, Guest", fontSize: 35);
+                }
+
+                final userData = snapshot.data!.data() as Map<String, dynamic>;
+                final firstName = userData['firstName'] ?? "User";
+
+                return Row(
+                  children: [
+                    CustomText(
+                      text: 'Hello, ',
+                      fontSize: 35,
+                      color: Colors.grey.shade400,
+                    ),
+                    CustomText(text: firstName, fontSize: 35),
+                  ],
+                );
+              },
             ),
 
             const CustomText(
@@ -84,23 +158,30 @@ class _HomepageState extends State<Homepage> {
 
             const SizedBox(height: 20),
 
-            // Categories row
+            // 🔹 Car brand categories
+            // i need to make the buttons pressable and change the color of the button when it is pressed
+            // and when no button is pressed the color of the button should be grey and view all cars
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
-                children: ["BMW", "Mercedes", "Audi", "Toyota"].map((brand) {
+                children: ["Bmw", "Mercedes", "Audi", "Toyota"].map((brand) {
+                  final isSelected = selectedBrand == brand;
+
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 2),
                     child: GestureDetector(
                       onTap: () {
                         setState(() {
-                          selectedBrand = brand;
+                          if (isSelected) {
+                            selectedBrand =
+                                null; // 👈 unselect (reset to all cars)
+                          } else {
+                            selectedBrand = brand; // 👈 select this brand
+                          }
                         });
                       },
                       child: CustomContainer(
-                        color: selectedBrand == brand
-                            ? Colors.redAccent
-                            : Colors.grey,
+                        color: isSelected ? Colors.redAccent : Colors.grey,
                         radius: 20,
                         padding: const EdgeInsets.symmetric(
                           vertical: 5,
@@ -115,8 +196,7 @@ class _HomepageState extends State<Homepage> {
             ),
 
             const SizedBox(height: 20),
-
-            // Firestore data
+            // 🔹 Firestore cars
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
                 stream: (selectedBrand == null)
@@ -159,7 +239,7 @@ class _HomepageState extends State<Homepage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Car image from Firebase Storage
+                            // 🔹 Car image
                             ClipRRect(
                               borderRadius: const BorderRadius.only(
                                 topLeft: Radius.circular(24),
@@ -173,7 +253,7 @@ class _HomepageState extends State<Homepage> {
                               ),
                             ),
 
-                            // Car details
+                            // 🔹 Car details
                             Padding(
                               padding: const EdgeInsets.all(8.0),
                               child: Column(
@@ -221,3 +301,12 @@ class _HomepageState extends State<Homepage> {
     );
   }
 }
+
+
+
+/*
+1\ when i delete account it comeback to homepage which is wrong it should go back to auth page
+
+
+
+*/

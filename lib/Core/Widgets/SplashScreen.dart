@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:autoelkady/Features/Auth/AuthGate.dart';
+import 'package:autoelkady/Features/Onboarding/RoleSelect.dart';
 import 'package:flutter/material.dart';
 
 class SplashScreen extends StatefulWidget {
